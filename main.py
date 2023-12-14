@@ -1,18 +1,16 @@
-from aiogram import Bot, Dispatcher
+import logging
+from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 import asyncio
-from aiogram.filters import CommandStart
-import sqlite3
+from aiogram.filters import Command
 import smtplib
 from email.mime.text import MIMEText
+from database import *
 
-
-TOKEN = "6868173085:AAEjMWlUHSYAA4AKg2yZdu05wBn-BYKfSm0"  # Токен бота
-database_name = 'database.db'
-
+TOKEN = "6469970376:AAFk2tdjhir2ooPM0JCEJfLc1xjE1fJOCts"  # Токен бота
+logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
-connection = sqlite3.connect(database_name)
 
 reply_keyboard = ReplyKeyboardMarkup(keyboard=[
     [
@@ -23,7 +21,14 @@ reply_keyboard = ReplyKeyboardMarkup(keyboard=[
         KeyboardButton(text="Контакты"),
         KeyboardButton(text="FAQ")
     ]
-], resize_keyboard=True) # Клавиатура 4 кнопки
+], resize_keyboard=True)  # Клавиатура 4 кнопки
+
+
+@dp.message(Command("start"))
+async def get_start(message: Message):
+    await message.answer("Добро пожаловать в бот Первый.Бит")
+
+
 
 # Нажатия на кнопки
 async def get_button(message: Message):
@@ -40,31 +45,21 @@ async def get_button(message: Message):
     elif message.text == "FAQ":
         await message.answer("FAQ нет")
 
+
 # Если есть вернет 1, если нет вернет 0
 async def check_user_tg_exists(message: Message):
-    cursor = connection.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS Users (
-        user_id INT PRIMARY KEY,
-        username VARCHAR(50) NOT NULL
-        )
-        ''')
-    connection.commit()
     user_id = message.from_user.id
-    username = message.from_user.username
     # Проверить наличие пользователя в базе данных
-    cursor = connection.cursor()
-    cursor.execute("SELECT * FROM Users WHERE user_id=?", (user_id,))
+    cursor = connection_clients_db.cursor()
+    cursor.execute("SELECT * FROM Clients WHERE TG_ID=?", (user_id,))
     result = cursor.fetchone()
     if result:
         # Пользователь существует в базе данных
         return 1
     else:
         # Пользователя нет в базе данных, добавить его
-        cursor.execute("INSERT INTO Users (user_id, username) VALUES (?, ?)",
-                       (user_id, username))
-        connection.commit()
         return 0
+
 
 # Передаем сообщение, функция отправляет
 async def send_email(message):
@@ -79,19 +74,25 @@ async def send_email(message):
     msg = MIMEText(message)
     server.sendmail(sender, recipient, msg.as_string())
 
-# Проверить есть ли инн в базе
-async def check_inn_user():
-    pass
 
-async def get_start(message: Message):
-    if await check_user_tg_exists(message) == 0:
-        await bot.send_message(message.from_user.id, "Спасибо, что зашли!")
+# Проверить есть ли инн в базе
+@dp.message(F.text.regexp(r'^[\d+]{10,12}$'))
+async def check_inn_user_exists(message: Message):
+    # Проверить наличие пользователя в базе данных
+    cursor = connection_clients_db.cursor()
+    cursor.execute("SELECT * FROM Clients WHERE INN=?", (int(message.text),))
+    result = cursor.fetchone()
+    if result:
+        await message.answer("Yes")
+        # Пользователь существует в базе данных
+        return 1
     else:
-        await bot.send_message(message.from_user.id, "Ты уже был тут", reply_markup=reply_keyboard)
+        await message.answer("No")
+        # Пользователя нет в базе данных
+        return 0
 
 
 async def start():
-    dp.message.register(get_start, CommandStart())
     dp.message.register(get_button)
     try:
         await dp.start_polling(bot)
