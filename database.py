@@ -32,7 +32,7 @@ data = [
 ]
 # with connection_clients_db:
 #    connection_clients_db.executemany(sql, data)
-
+#
 # with connection_clients_db:
 #    con = connection_clients_db.execute("SELECT * FROM Clients")
 #    for row in data:
